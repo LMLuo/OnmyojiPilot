@@ -51,9 +51,9 @@
 | 副本 | 状态 | 说明 |
 |---|---|---|
 | 御魂 · 巫女大蛇（悲鸣） | ✅ 可用 | 单人，从御魂副本界面开始，刷满指定次数停止 |
-| 英杰试炼 · 鬼兵演武 | ✅ 可用 | 源赖光的经验本，从英杰试炼主页面自动进入 |
+| 英杰试炼 · 鬼兵演武 | ✅ 可用 | 源赖光的经验本，会自动切到源赖光并进入 |
+| 英杰试炼 · 传承试炼 | ✅ 可用 | 藤原道长的经验本，会自动切英杰，开跑前查御灵是否满级 |
 | 英杰试炼 · 兵藏秘境 | 🚧 规划中 | 需要"选祝福"逻辑，架构已就位 |
-| 英杰试炼 · 传承试炼 | 🚧 规划中 | 藤原道长的经验本，同鬼兵演武结构 |
 | 英杰试炼 · 梦虚秘境 | 🚧 规划中 | 6 种祝福按优先级选，需额外逻辑 |
 | 觉醒副本 | 🚧 规划中 | 架构已就位，缺关卡识别资产 |
 | 御灵 | 🚧 规划中 | 同上 |
@@ -66,6 +66,12 @@
 |---|---|---|
 | 御魂 · 悲鸣 | 约 27 秒（战斗 ~20s + 结算 ~7s） | — |
 | 英杰试炼 · 鬼兵演武 | 约 24 秒（23.4 ~ 25.2s） | 6 轮 |
+| 英杰试炼 · 传承试炼 | 约 50 秒（45.5 ~ 59.9s） | 5 轮 |
+
+传承试炼明显更久是因为它是**多波战斗**（战斗界面左下角有 `0/8` 波次计数），
+同样是挂一轮，它的战斗阶段就要 45~55 秒。这和脚本效率无关。
+鬼兵演武和传承试炼的「挑战」按钮实测在**同一个点位**（0.0px 偏差），
+所以两者的流程能共用一个任务类。
 
 战力更高会更快，低一些会更慢，**不要拿这些数字去衡量程序效率**。
 程序本身只负责识别和点击，不改变战斗时长。
@@ -85,14 +91,15 @@ pip install -r requirements.txt
 1. 打开 ZenLink 并连接手机，确认投屏画面正常、窗口不要最小化
 2. 游戏停在对应任务的起始界面：
    - 御魂 → **御魂副本 · 悲鸣** 界面
-   - 英杰试炼 → **英杰试炼** 主页面（脚本会自己点进鬼兵演武）
+   - 英杰试炼 → **英杰试炼** 主页面，**在谁的英杰上都行**（脚本会自己切）
 3. 双击 `start_console.bat`（或 `python server.py`），浏览器会自动打开控制台
 4. 选任务 → 填次数 → 开始挂机
 
 > 探索界面那个会漂浮的灯笼没法用后台消息点中，所以**从庭院走到探索页这一步需要手动**。
 > 停在起始界面之后，全程不用管。
 
-命令行也可以：`python main.py 30 orochi` / `python main.py 30 hero_test`
+命令行也可以：`python main.py 30 orochi` / `python main.py 30 hero_test` /
+`python main.py 30 hero_test_ccsl`
 
 ## 界面
 
@@ -185,9 +192,9 @@ OnmyojiPilot/
 │   ├── orochi/              #   御魂模块
 │   │   ├── orochi_task.py
 │   │   └── templates/       #   识别模板
-│   └── hero_test/           #   英杰试炼模块
+│   └── hero_test/           #   英杰试炼模块（鬼兵演武 / 传承试炼共用）
 │       ├── hero_test_task.py
-│       ├── task_config.py   #     模板配置（roi 注明 OAS 原值）
+│       ├── task_config.py   #     模板配置（roi 注明 OAS 原值）+ LAYERS 分层定义
 │       └── templates/
 ├── web/index.html           # 网页控制台（无外部依赖，纯原生）
 ├── config.py                # 御魂模块的模板配置、点击区域、时长表
@@ -206,7 +213,9 @@ OnmyojiPilot/
 - 投屏窗口**不能被最小化**，最小化后抓不到画面（会自动尝试还原）
 - 从庭院到探索页需要手动走一次（漂浮灯笼点不中）
 - 只做单人模式，不涉及组队、御魂溢出、体力不足检测
-- 英杰试炼目前**只支持源赖光这一侧**，不支持自动切换藤原道长
+- 英杰试炼支持鬼兵演武和传承试炼两个子玩法，会自动切换源赖光/藤原道长；
+  兵藏秘境、梦虚秘境需要"选祝福"逻辑，暂未实现
+- 传承试炼开跑前会查藤原道长的御灵是否已显示「满」，满级则拒绝启动（白刷没意义）
 - 点挑战时若弹出「当前未开启经验加成，是否继续挑战？」，脚本会自动点【开始挑战】继续。
   它**不会**替你开经验加成，也**不会**勾选「本周不再提醒」——那属于玩家设置，脚本不越权
 - 兵道帖/体力不足时不会自动补，点满重试次数后会提示你确认
@@ -227,8 +236,9 @@ OnmyojiPilot/
 | `core/base_task.py` | `tasks/base_task.py`、`module/device/device.py` | `appear` 的每目标独立 interval 定时器、`click_record`（10 次 / 6+6 判定）、`stuck_record` |
 | `core/random_utils.py` | `module/base/utils/utils.py` | `random_normal_distribution_int`、`random_rectangle_point`、`ensure_time` 的截断正态采样 |
 | `tasks/orochi/orochi_task.py` | `tasks/Orochi/script_task.py`、`tasks/Component/GeneralBattle/battle_wait.py` | 副本流程编排、`C_WIN_1/2/3` 随机区域点击、结算界面的 `reward_exclude_click`（只点空白、避开道具图标） |
-| `tasks/hero_test/hero_test_task.py` | `tasks/HeroTest/script_task.py` | 英杰试炼的流程编排、`enter_battle` 的重试上限、页面锚点判定 |
-| `tasks/hero_test/templates/*.png` | `tasks/HeroTest/as/`、`tasks/Component/GeneralBattle/gb/` | 鬼兵演武的入口/挑战/返回模板 + 通用战斗结算模板 |
+| `tasks/hero_test/hero_test_task.py` | `tasks/HeroTest/script_task.py` | 英杰试炼的流程编排、`enter_battle` 的重试上限、页面锚点判定、`check_level_max` 的满级拦截 |
+| `tasks/hero_test/task_config.py` 的 `LAYERS` | `script_task.py` 的 `switch_hero_dict` / `init_pages()` 里的 `case Layer` | 用一张表把"哪一层属于哪位英杰、入口是哪个模板、页面标志是什么"集中起来，两个子玩法共用一个任务类 |
+| `tasks/hero_test/templates/*.png` | `tasks/HeroTest/as/`、`tasks/Component/GeneralBattle/gb/` | 两个子玩法的入口/挑战/返回/英杰头像模板 + 通用战斗结算模板 |
 | `core/coord.py` | ——（本项目新增） | 把 OAS 的 1280×720 roi 换算到 878×404，让新增副本能直接复用 OAS 的坐标 |
 | `tasks/orochi/templates/*.png` | `tasks/**/assets.py` 引用的图 | **全部识别模板图**，经 `tools/import_oas_assets.py` 等比缩放导入 |
 | `tools/import_oas_assets.py` | `dev_tools/assets_extract.py` | 从 `assets.py` 解析 `RuleImage` 定义并批量导入模板的思路 |
