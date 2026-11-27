@@ -188,45 +188,16 @@ class HeroTestTask(BaseTask):
     def battle_once(self):
         round_start = time.time()
 
-        # 1. 点挑战 + 确认真的进战斗（OAS enter_battle：最多重试 3~4 次）
-        entered = False
-        for attempt in range(1, 5):
-            ok, score, pos = self.appear("hero_fire")
-            if not ok:
-                # 挑战按钮不可见：多半已经在战斗/结算里，交给结算等待处理。
-                # 绝不在这里乱点（战斗中乱点可能关掉自动战斗）。
-                log.info("挑战按钮不可见（第 %d 次检查），转入结算等待", attempt)
-                break
-
-            target = self.matcher.templates.get("hero_fire")
-            x, y = target.click_point(pos, self.bgr) if target else pos
-            log.info("点击挑战 @(%d,%d) score=%.3f（第 %d 次尝试）", x, y, score, attempt)
-            self.click(x, y, control_name="hero_fire")
-            if attempt > 1:
-                self.stats["retries"] += 1
-
-            # 2. 等挑战按钮消失 = 已进入战斗
-            t_click = time.time()
-            if self.wait_until_gone("hero_fire", timeout=8):
-                log.info("已进入战斗（%.1fs）", time.time() - t_click)
-                entered = True
-                break
-
+        # 1. 点挑战 + 确认真的进战斗
+        if not self.enter_battle():
             if self.appear("hero_fire")[0]:
-                log.warning("挑战按钮仍在，点击未生效，重试（已等 %.1fs）",
-                            time.time() - t_click)
-                continue
-            log.info("挑战按钮已消失，判定已进入战斗（%.1fs）", time.time() - t_click)
-            entered = True
-            break
+                # 关键：不能继续往下走，否则结算等待会因为"还看得见挑战按钮"
+                # 而误判为"已打完回来"，把没打的算成打完了
+                log.error("点击挑战未生效（挑战按钮仍在），本轮作废")
+                return False
+            log.info("挑战按钮已不可见，按已进入战斗处理")
 
-        if not entered and self.appear("hero_fire")[0]:
-            # 关键：不能继续往下走，否则结算等待会因为"还看得见挑战按钮"
-            # 而误判为"已打完回来"，把没打的算成打完了
-            log.error("点击挑战未生效（挑战按钮仍在），本轮作废")
-            return False
-
-        # 3. 等战斗结束 + 结算推进 + 回到鬼兵演武页面
+        # 2. 等战斗结束 + 结算推进 + 回到鬼兵演武页面
         if not self.wait_and_return():
             log.warning("未等到回到鬼兵演武页面")
             return False
@@ -237,6 +208,73 @@ class HeroTestTask(BaseTask):
         self.stats["durations"].append(round(elapsed, 2))
         log.info("第 %d 次完成，本轮耗时 %.1fs", self.count, elapsed)
         return True
+
+    def enter_battle(self, timeout=30):
+        """
+        点挑战并确认真的进入战斗。
+
+        实机踩到的坑（2026-11-27，第一次联调就撞上）：
+        点击「挑战」后游戏会弹出一个**模态框**：
+            当前未开启经验加成，是否继续挑战？   [取消] [开始挑战]
+        这个弹窗**不会遮挡**背后的挑战按钮 —— hero_fire 依然能匹配到，
+        于是旧逻辑判定"点了没生效"，反复去点被弹窗挡住的按钮，
+        12 次后触发 GameTooManyClickError。
+        （日志现场：16:22:12~16:23:27 共点 12 次，坐标都在按钮范围内）
+
+        处理方式照搬 OAS `tasks/HeroTest/script_task.py:75` 的
+        `appear_then_click(I_START_CHALLENGE)`：先看确认框，点了再说。
+
+        注意：不点「本周不再提醒」的勾选框 —— 那是玩家的个人设置，
+        脚本无权替用户改。
+
+        Returns:
+            True=已进入战斗（或战斗界面标志出现），False=确实没进去
+        """
+        start = time.time()
+        clicks = 0
+        max_clicks = 4
+        confirm_logged = False
+
+        while time.time() - start < timeout:
+            self.check_stop()
+            self.stuck_record_check()
+            if not self.screenshot_fresh():
+                continue
+
+            # 已经能看到战斗结算标志 = 已在战斗里
+            if self.is_in_battle():
+                log.info("检测到战斗界面标志，判定已进入战斗")
+                return True
+
+            # 经验加成确认框：优先处理，否则会一直点被遮住的挑战按钮
+            if self.appear_then_click("confirm_start", interval=1.2):
+                if not confirm_logged:
+                    log.info("检测到「未开启经验加成」确认框，点击【开始挑战】")
+                    confirm_logged = True
+                self.sleep(self.timing.get("after_click", (0.5, 0.8)))
+                continue
+
+            # 挑战按钮不见了 = 已进入战斗/加载
+            if not self.is_gbb_page():
+                log.info("挑战按钮已消失，判定已进入战斗")
+                return True
+
+            if clicks >= max_clicks:
+                log.error("连续点击挑战 %d 次仍未进入战斗", clicks)
+                log.error("常见原因：兵道帖/体力不足（按钮仍在但点了没反应），"
+                          "或者在弹出的提示框上被拦住了。请看一眼游戏画面确认。")
+                return False
+
+            if self.appear_then_click("hero_fire", interval=1.2):
+                clicks += 1
+                self.stats["retries"] += 1 if clicks > 1 else 0
+                log.info("点击挑战（第 %d 次尝试）", clicks)
+                continue
+
+            self.sleep(self.timing.get("poll", 0.3))
+
+        log.error("等待 %.0fs 仍未进入战斗", timeout)
+        return False
 
     def wait_and_return(self):
         """
@@ -308,15 +346,25 @@ class HeroTestTask(BaseTask):
                 battle_started = True
 
             # 兜底：应对游戏更新导致锚点模板失效。
-            # 三个条件必须同时满足：新鲜帧 + 进战斗超 8s + 连续静止 ~2.4s。
-            # 点哪里也要分情况：看得见结算锚点才敢点结算空白区，
-            # 否则只点已知安全背景区（战斗中全屏乱点会把战斗卡死，御魂那边踩过）。
-            if battle_started and still_frames >= 8 and fresh:
+            #
+            # 三个条件必须同时满足（御魂那边踩过的坑，这里加了更强的约束）：
+            #   1. fresh —— 只认新鲜帧。窗口最小化时缓存帧的"静止"是假的。
+            #   2. 静止帧数 >= 25（poll≈0.3s，约 7.5s）—— **鬼兵演武是回合制，
+            #      战斗中出现 2~3 秒完全静止是正常的**。首次联调时阈值 8 帧(2.4s)
+            #      在战斗中触发了两次瞎点，属于"战斗中点界面按钮"的危险动作。
+            #   3. 进战斗超过 45s —— 战斗本身只要 20s 左右，超过 45s 还没结束，
+            #      基本可以确定不是正常战斗流程。
+            #
+            # 点哪里：看得见结算锚点才点结算空白区；
+            # 否则只点那 4 块已知安全背景区（绝不全屏随机点）。
+            if battle_started and still_frames >= 25 and fresh \
+                    and time.time() - start > 45:
                 if self.appear("win")[0] or self.appear("de_win")[0] or self.appear("reward")[0]:
-                    log.info("画面静止且处于结算界面，点空白推进")
+                    log.info("画面长时间静止且处于结算界面，点空白推进")
                     self.click_settle_blank(control_name="still_settle")
                 else:
-                    log.info("画面长时间静止且无已知按钮，安全空白区点击继续")
+                    log.warning("画面已静止 %.1fs 且超过 45s 未结束，安全空白区点击兜底",
+                                still_frames * 0.3)
                     self.click_random_region(control_name="still_blank", repeat_check=False)
                 still_frames = 0
 

@@ -62,10 +62,17 @@ TASK_ASSETS = {
             ("tasks/GameUi/assets.py", "I_CHECK_HERO_TEST", "hero_test_page"),
             # 左侧"鬼兵演武"竖排标签
             ("tasks/HeroTest/assets.py", "I_GBB", "gbb_entry"),
-            # 鬼兵演武页面标志（左侧御灵头像）
-            ("tasks/HeroTest/assets.py", "I_CHECK_HERO1_EXP", "hero_panel"),
+            # 说明：I_CHECK_HERO1_EXP（鬼兵演武页的御灵头像）没导 —— 实测它在
+            # 英杰试炼主页面上会在人物胸口误匹配到 0.693，作为页面标志不可靠。
+            # 鬼兵演武页用 hero_fire 判就够了。
             # 右下角"挑战"按钮
             ("tasks/HeroTest/assets.py", "I_BATTLE", "hero_fire"),
+            # 点挑战后弹出的「当前未开启经验加成，是否继续挑战？」确认框里的【开始挑战】
+            # 这个弹窗挡在挑战按钮前面，不处理就会一直点被遮住的按钮（实测踩过）
+            ("tasks/HeroTest/assets.py", "I_START_CHALLENGE", "confirm_start"),
+            # 说明：OAS 用 I_REAL_MONEY（13x17 的"真钱"小图标）判断门票不足，
+            # 但这么小的模板放在大范围搜索里误匹配率极高，收益不值。
+            # 我们改成"点满次数仍未进入战斗"时直接提示可能是门票/体力不足。
             # 鬼兵演武左上角返回
             ("tasks/HeroTest/assets.py", "I_GBB_BACK", "gbb_back"),
             # 通用战斗结算（与御魂同一套，直接复用 OAS 源图，不跨模块拷贝）

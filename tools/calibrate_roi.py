@@ -100,6 +100,26 @@ def center_of(roi):
     return (x + w / 2.0, y + h / 2.0)
 
 
+def save_visualization(base, rows, spec, out_dir):
+    """把匹配结果画到基准帧上：绿框=实测命中，红十字=配置的中心"""
+    os.makedirs(out_dir, exist_ok=True)
+    vis = base.copy()
+    for name, center, rect, score in rows:
+        x, y, w, h = rect
+        cv2.rectangle(vis, (x, y), (x + w, y + h), (60, 190, 60), 1)
+        cv2.putText(vis, f"{name} {score:.2f}", (x, max(9, y - 3)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.32, (60, 190, 60), 1)
+        exp = spec.templates.get(name, {}).get("roi_front")
+        if exp:
+            ex, ey = int(exp[0] + exp[2] / 2), int(exp[1] + exp[3] / 2)
+            cv2.drawMarker(vis, (ex, ey), (60, 60, 210), cv2.MARKER_CROSS, 9, 1)
+    path = os.path.join(out_dir, "matched.png")
+    cv2.imwrite(path, vis)
+    print(f"\n匹配可视化: {path}  （绿框=实测，红十字=配置中心）")
+    # 顺带把基准帧也存一份，方便对照
+    cv2.imwrite(os.path.join(out_dir, "base_frame.png"), base)
+
+
 def main():
     ap = argparse.ArgumentParser(description="模板 roi 自校准（通用）")
     ap.add_argument("--task", default="hero_test")
@@ -192,6 +212,10 @@ def main():
     print(f"命中 {len(dxs)}/{len(spec.templates)} 个模板")
     print(f"偏差中位数  dx={mdx:+.1f}  dy={mdy:+.1f}   （极差 {spread_x:.0f} / {spread_y:.0f}）")
 
+    # 可视化：任何分支都先存图，方便直接用眼睛核对匹配对不对
+    if args.save_dir and rows:
+        save_visualization(base, rows, spec, args.save_dir)
+
     if abs(mdx) <= 10 and abs(mdy) <= 10 and spread_x <= 20 and spread_y <= 20:
         print("\n结论：偏差很小，配置可以直接用，不用标定。")
         return 0
@@ -204,7 +228,7 @@ def main():
 
     print("\n结论：偏差方向一致，属于整体平移。")
     if not args.write:
-        print(f"      可以加 --write 把修正量写入标定文件：")
+        print("      可以加 --write 把修正量写入标定文件：")
         print(f"      offset_x {coord.DEFAULT.offset_x:.2f} -> {coord.DEFAULT.offset_x + mdx:.2f}")
         print(f"      offset_y {coord.DEFAULT.offset_y:.2f} -> {coord.DEFAULT.offset_y + mdy:.2f}")
         print("      （注意：加了 --write 之后 ROI 会整体平移，")
@@ -220,16 +244,6 @@ def main():
     print(f"      已写入 {path}")
     print(f"      S={inst.scale:.6f}  OX={inst.offset_x:.3f}  OY={inst.offset_y:.3f}")
     print("      重新跑一次本工具确认偏差归零；如需撤销，删掉这个 json 即可。")
-
-    if args.save_dir and rows:
-        vis = base.copy()
-        for name, center, rect, score in rows:
-            cv2.rectangle(vis, (rect[0], rect[1]),
-                          (rect[0] + rect[2], rect[1] + rect[3]), (0, 200, 0), 1)
-            cv2.putText(vis, f"{name}", (rect[0], max(10, rect[1] - 3)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 200, 0), 1)
-        cv2.imwrite(os.path.join(args.save_dir, "matched.png"), vis)
-        print(f"      匹配可视化: {os.path.join(args.save_dir, 'matched.png')}")
     return 0
 
 
