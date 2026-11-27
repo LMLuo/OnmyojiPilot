@@ -21,7 +21,7 @@ from config import OROCHI_CONFIG
 from core.window import WindowDevice
 from core.matcher import Matcher
 from core.logbuffer import LOG_BUFFER, install as install_log_buffer
-from tasks.registry import get_task, DEFAULT_TASK_ID
+from tasks.registry import get_task
 
 log = logging.getLogger("OnmyojiPilot")
 
@@ -90,7 +90,11 @@ class BotRunner:
         self.run_id = None
         self.error = ""
         self.requested_limit = 0
-        self.task_id = DEFAULT_TASK_ID
+        # None = 还没启动过任何任务。不要在这里填默认任务 id：
+        # 状态快照会把 task_id 报给前端，空闲时填默认值会让前端误以为
+        # "当前选的是御魂"，从而把用户刚点选的任务卡覆盖掉
+        # （表现为点「鬼兵演武」一秒后又跳回第一个，2026-11-27 修）。
+        self.task_id = None
         self.log_start_seq = 0
         self._stop_requested = False
 
@@ -102,7 +106,9 @@ class BotRunner:
     def _task_info(self):
         spec = get_task(self.task_id)
         return {
-            "task_id": spec.id,
+            # 原样回报，没启动过就是 None（前端据此判断"不要覆盖我的选择"）。
+            # 下面的 name/group/icon 用 spec 的默认值，只用于界面顶栏展示。
+            "task_id": self.task_id,
             "task_name": spec.name,
             "task_group": spec.group,
             "task_icon": spec.icon,

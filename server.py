@@ -164,18 +164,64 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json({"ok": False, "error": "未知接口"}, 404)
 
 
-def _pick_port(start=DEFAULT_PORT, tries=20):
-    """找一个可用端口，避免和别的程序撞车"""
+def _port_in_use(port):
+    """端口上是不是真的有个东西在监听（不是"能不能 bind"这种虚的判定）"""
     import socket
-    for port in range(start, start + tries):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                s.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
-    return start
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        return s.connect_ex(("127.0.0.1", port)) == 0
+
+
+class _ExclusiveServer(ThreadingHTTPServer):
+    """
+    必须关掉地址复用。原因在 Windows 上：
+
+    socketserver 默认 `allow_reuse_address = 1`，也就是给 socket 设 SO_REUSEADDR。
+    但这个选项在 Windows 上的语义是"**允许抢占已经被别人监听的端口**"，
+    跟 POSIX 的"允许复用 TIME_WAIT 的端口"完全不是一回事。
+    后果：本程序开第二个实例时能**成功绑上同一个端口**，两个进程各自
+    起一个机器人线程去点同一个 ZenLink 窗口 —— 点出来的效果是乱的。
+    实测撞到过：`netstat` 里同一个 8765 挂着两个 LISTENING。
+
+    之前那个 `_pick_port()` 也自己设了 SO_REUSEADDR 来"测试端口是否可用"，
+    在 Windows 上这个测试永远返回"可用"，等于没测。那个函数已经删掉，
+    换成 `_choose_port()` + `_port_in_use()` 这套真检测。
+    """
+
+    allow_reuse_address = False
+    daemon_threads = True
+
+
+def _choose_port():
+    """
+    决定监听端口。默认端口已被占用时**直接退出**，绝不静默换一个。
+
+    为什么不"找下一个空端口"：两个控制台各自带一个机器人线程，
+    同时跑会互相抢着点同一台设备。偷偷换端口会让用户以为没事，
+    然后在游戏里看到莫名其妙的点击。宁可不启动。
+    想强行换端口可以设环境变量 YYS_PORT。
+    """
+    env_port = os.environ.get("YYS_PORT", "").strip()
+    if env_port:
+        try:
+            return int(env_port)
+        except ValueError:
+            print(f"YYS_PORT={env_port!r} 不是数字，忽略")
+
+    if _port_in_use(DEFAULT_PORT):
+        url = f"http://127.0.0.1:{DEFAULT_PORT}/"
+        print("=" * 56, flush=True)
+        print(f" 端口 {DEFAULT_PORT} 上已经有服务在跑，启动中止", flush=True)
+        print("=" * 56, flush=True)
+        print(f" 很可能你已经开着一个控制台，直接用它就好：{url}", flush=True)
+        print(" 如果那个是残留进程（关窗口没关干净），先结束它：", flush=True)
+        print(f"     netstat -ano | findstr {DEFAULT_PORT}", flush=True)
+        print("     taskkill /PID <上面查到的PID> /F", flush=True)
+        print(" 两个控制台同时开，会互相抢着点同一台设备，所以这里不做自动改端口。", flush=True)
+        print(" 确实需要换端口：set YYS_PORT=8766 再启动。", flush=True)
+        raise SystemExit(1)
+
+    return DEFAULT_PORT
 
 
 def main():
@@ -188,9 +234,13 @@ def main():
     )
     install_log_buffer()
 
-    port = _pick_port()
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    server.daemon_threads = True
+    port = _choose_port()
+    try:
+        server = _ExclusiveServer(("127.0.0.1", port), Handler)
+    except OSError as e:
+        print(f"端口 {port} 绑定失败：{e}", flush=True)
+        print("换个端口再试：set YYS_PORT=8766", flush=True)
+        raise SystemExit(1)
     url = f"http://127.0.0.1:{port}/"
 
     print("=" * 56, flush=True)

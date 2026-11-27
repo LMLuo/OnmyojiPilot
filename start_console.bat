@@ -19,8 +19,8 @@ echo.
 
 if errorlevel 1 (
     echo.
-    echo [ERROR] Server exited abnormally.
-    echo Try running again, or check numpy / opencv / pillow are installed.
+    echo [ERROR] Server exited abnormally. The reason is printed above.
+    echo If nothing above talks about the port, check numpy / opencv / pillow.
     echo.
     pause
 )

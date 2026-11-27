@@ -1019,7 +1019,16 @@
   function applyStatus(d) {
     var running = !!d.running;
     var taskChanged = false;
-    if (d.task_id && d.task_id !== S.taskId) {
+    // 只有**服务端真的在跑**的时候才跟随它的 task_id。
+    //
+    // 这里原来是无条件跟随，结果是个必现 bug：空闲时服务端回报的 task_id
+    // 是"上一次跑过谁"，进程刚起来时就是默认任务（御魂）。
+    // 用户点「鬼兵演武」-> 本地选中 -> 700ms 后状态轮询回来 ->
+    // 被服务端的 orochi 覆盖 -> 卡片跳回第一个。看起来就像"点不动"。
+    //
+    // 保留 running 条件下的跟随是有意义的：命令行 `python main.py 3 hero_test`
+    // 起的任务，控制台也能立刻反映出在跑的是哪个。
+    if (running && d.task_id && d.task_id !== S.taskId) {
       S.taskId = d.task_id;
       taskChanged = true;
     }
