@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from config import (TEMPLATES, CLICK_REGIONS, CLOSE_REGIONS,
                     SETTLE_EXCLUDE, TIMING, OROCHI_CONFIG)
 from tasks.orochi.orochi_task import OrochiTask
+from tasks.hero_test.hero_test_task import HeroTestTask
+from tasks.hero_test import task_config as hero_test_cfg
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -54,6 +56,7 @@ class TaskSpec:
 
 
 OROCHI_TEMPLATE_DIR = os.path.join(BASE_DIR, "tasks", "orochi", "templates")
+HERO_TEST_TEMPLATE_DIR = os.path.join(BASE_DIR, "tasks", "hero_test", "templates")
 
 TASKS = [
     TaskSpec(
@@ -74,6 +77,26 @@ TASKS = [
         close_regions=CLOSE_REGIONS,
         settle_exclude=SETTLE_EXCLUDE,
         timing=TIMING,
+    ),
+    # ---- 英杰试炼：鬼兵演武（源赖光的经验本）----
+    TaskSpec(
+        id="hero_test",
+        name="英杰试炼 · 鬼兵演武",
+        group="英杰试炼",
+        subtitle="源赖光经验本",
+        desc="从英杰试炼主页面开始，自动进入鬼兵演武并循环挑战，"
+             "刷满指定次数后停止。用于刷御灵等级。",
+        icon="katana",
+        accent="#a2321f",
+        default_limit=30,
+        available=True,
+        cls=HeroTestTask,
+        template_dir=HERO_TEST_TEMPLATE_DIR,
+        templates=hero_test_cfg.TEMPLATES,
+        config=hero_test_cfg.HERO_TEST_CONFIG,
+        click_regions=hero_test_cfg.CLICK_REGIONS,
+        settle_exclude=hero_test_cfg.SETTLE_EXCLUDE,
+        timing=hero_test_cfg.TIMING,
     ),
     # ---- 以下为规划中：结构已就位，只差各自的识别资产与流程 ----
     TaskSpec(

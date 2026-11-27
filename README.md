@@ -51,14 +51,19 @@
 | 副本 | 状态 | 说明 |
 |---|---|---|
 | 御魂 · 巫女大蛇（悲鸣） | ✅ 可用 | 单人，从御魂副本界面开始，刷满指定次数停止 |
+| 英杰试炼 · 鬼兵演武 | ✅ 可用 | 源赖光的经验本，从英杰试炼主页面自动进入 |
+| 英杰试炼 · 兵藏秘境 | 🚧 规划中 | 需要"选祝福"逻辑，架构已就位 |
+| 英杰试炼 · 传承试炼 | 🚧 规划中 | 藤原道长的经验本，同鬼兵演武结构 |
+| 英杰试炼 · 梦虚秘境 | 🚧 规划中 | 6 种祝福按优先级选，需额外逻辑 |
 | 觉醒副本 | 🚧 规划中 | 架构已就位，缺关卡识别资产 |
 | 御灵 | 🚧 规划中 | 同上 |
 | 探索副本 | 🚧 规划中 | 同上 |
 
 单轮耗时**完全取决于你自己的式神战力**，不是一个通用性能指标。
-作者自己的账号实测约 **27 秒**（战斗 ~20s + 结算 ~7s）——这只是"我这套阵容"的数据，
+作者自己的账号实测——御魂约 **27 秒**（战斗 ~20s + 结算 ~7s）——这只是"我这套阵容"的数据，
 战力更高会更快，低一些会更慢，**不要拿这个数字去衡量程序效率**。
 程序本身只负责识别和点击，不改变战斗时长。
+鬼兵演武的单轮耗时同理由你的御灵等级和阵容决定，实机跑过后再补。
 
 窗口尺寸方面：实测 540×249 ~ 1600×736 各种尺寸都能正常识别与点击，窗口可以随便拖。
 
@@ -73,14 +78,16 @@ pip install -r requirements.txt
 ```
 
 1. 打开 ZenLink 并连接手机，确认投屏画面正常、窗口不要最小化
-2. 游戏停在 **御魂副本 · 悲鸣** 界面
+2. 游戏停在对应任务的起始界面：
+   - 御魂 → **御魂副本 · 悲鸣** 界面
+   - 英杰试炼 → **英杰试炼** 主页面（脚本会自己点进鬼兵演武）
 3. 双击 `start_console.bat`（或 `python server.py`），浏览器会自动打开控制台
 4. 选任务 → 填次数 → 开始挂机
 
-> 探索界面那个会漂浮的灯笼没法用后台消息点中，所以**从庭院走到御魂副本这一步需要手动**。
-> 停在御魂副本界面之后，全程不用管。
+> 探索界面那个会漂浮的灯笼没法用后台消息点中，所以**从庭院走到探索页这一步需要手动**。
+> 停在起始界面之后，全程不用管。
 
-命令行也可以：`python main.py 30 orochi`
+命令行也可以：`python main.py 30 orochi` / `python main.py 30 hero_test`
 
 ## 界面
 
@@ -110,6 +117,13 @@ pip install -r requirements.txt
 **坐标映射**。窗口不是固定尺寸，用 contain 映射（等比缩放 + 居中黑边）把基准分辨率
 `878×404` 映射到当前窗口，点击坐标只在出口换算一次。
 
+**复用 OAS 的 roi**。OAS 的坐标是 `1280×720` 口径，我们的是 `878×404`，不能照抄。
+`core/coord.py` 做了这个换算，不是估的：`1280 × (404/720) = 718.22`，
+两侧各留 `79.889` 黑边，`718.22 + 79.889×2 = 878.00` 正好等于基准宽度——
+说明投屏画面是"按高度缩放到 404，左右留边"。拿已有的三个实测命中点校验，
+纵向误差 ≤6px，横向最好的一个只差 0.1px。所以新增副本时，
+OAS 的 roi 可以换算后直接用，再跑一次 `tools/calibrate_roi.py` 实机核对。
+
 **识别**。每个模板都有搜索区（`roi_back`）和点击区（`roi_front`）。
 近黑背景的细字模板（如"点击屏幕继续"）光靠 `TM_CCOEFF_NORMED` 会在亮斑上误判，
 所以加了一层二值亮部结构校验，把小窗口下的漏检和误检一起解决。
@@ -134,6 +148,18 @@ pip install -r requirements.txt
 **服务端和前端一行都不用改** —— 任务卡、历史记录、日志会自动接上。
 未实现的任务登记为 `available=False` 即可，界面上会显示成"规划中"的灰卡。
 
+如果目标副本 OAS 里已经有（大概率有），模板和 roi 都不用从零标：
+
+```bash
+# 1. 加进 tools/import_oas_assets.py 的 TASK_ASSETS，然后导入模板
+python tools/import_oas_assets.py <任务名>
+
+# 2. 把脚本打印出的 roi 填进你的 task_config.py（已按 878x404 换算好）
+
+# 3. 实机停在目标界面，跑一次校准核对偏差
+python tools/calibrate_roi.py --task <任务名>
+```
+
 ## 目录结构
 
 ```
@@ -141,17 +167,22 @@ OnmyojiPilot/
 ├── core/                    # 与具体副本无关的底层能力
 │   ├── window.py            #   窗口定位、PrintWindow 截图、坐标映射、后台点击
 │   ├── matcher.py           #   模板匹配内核（roi + 多尺度 + 二值结构校验）
+│   ├── coord.py             #   OAS 1280x720 坐标 -> 本项目 878x404 的换算层
 │   ├── click.py             #   随机点击区域 / 避开指定区域的随机点击
 │   ├── base_task.py         #   任务基类：定时器、防卡死、点击记录
 │   ├── random_utils.py      #   正态分布取点、随机时长
 │   └── logbuffer.py         #   日志环形缓冲（供网页增量拉取）
 ├── tasks/
 │   ├── registry.py          #   任务注册表（新增副本改这里）
-│   └── orochi/              #   御魂模块
-│       ├── orochi_task.py
-│       └── templates/       #   识别模板
+│   ├── orochi/              #   御魂模块
+│   │   ├── orochi_task.py
+│   │   └── templates/       #   识别模板
+│   └── hero_test/           #   英杰试炼模块
+│       ├── hero_test_task.py
+│       ├── task_config.py   #     模板配置（roi 注明 OAS 原值）
+│       └── templates/
 ├── web/index.html           # 网页控制台（无外部依赖，纯原生）
-├── config.py                # 模板配置、点击区域、时长表
+├── config.py                # 御魂模块的模板配置、点击区域、时长表
 ├── bot_runner.py            # 运行器：线程管理、状态快照、历史存档
 ├── server.py                # 本地 HTTP 服务（stdlib，只监听 127.0.0.1）
 ├── main.py                  # 命令行入口
@@ -159,14 +190,16 @@ OnmyojiPilot/
 └── docs/
 ```
 
-约 2500 行 Python + 一个单文件前端，没有框架依赖。
+约 3200 行 Python + 一个单文件前端，没有框架依赖。
 
 ## 已知限制
 
 - 仅 Windows（依赖 Win32 的 `PrintWindow` / `PostMessage`）
 - 投屏窗口**不能被最小化**，最小化后抓不到画面（会自动尝试还原）
-- 从庭院到御魂副本需要手动走一次
+- 从庭院到探索页需要手动走一次（漂浮灯笼点不中）
 - 只做单人模式，不涉及组队、御魂溢出、体力不足检测
+- 英杰试炼目前**只支持源赖光这一侧**，不支持自动切换藤原道长
+- 兵道帖/门票不足时不会自动补，只会在识别到"购买"图标时退出
 - **耗时不代表程序性能**：单轮时长由你账号的式神战力决定，作者实测 27 秒只是个人数据
 
 ## 致谢与许可
@@ -184,6 +217,9 @@ OnmyojiPilot/
 | `core/base_task.py` | `tasks/base_task.py`、`module/device/device.py` | `appear` 的每目标独立 interval 定时器、`click_record`（10 次 / 6+6 判定）、`stuck_record` |
 | `core/random_utils.py` | `module/base/utils/utils.py` | `random_normal_distribution_int`、`random_rectangle_point`、`ensure_time` 的截断正态采样 |
 | `tasks/orochi/orochi_task.py` | `tasks/Orochi/script_task.py`、`tasks/Component/GeneralBattle/battle_wait.py` | 副本流程编排、`C_WIN_1/2/3` 随机区域点击、结算界面的 `reward_exclude_click`（只点空白、避开道具图标） |
+| `tasks/hero_test/hero_test_task.py` | `tasks/HeroTest/script_task.py` | 英杰试炼的流程编排、`enter_battle` 的重试上限、页面锚点判定 |
+| `tasks/hero_test/templates/*.png` | `tasks/HeroTest/as/`、`tasks/Component/GeneralBattle/gb/` | 鬼兵演武的入口/挑战/返回模板 + 通用战斗结算模板 |
+| `core/coord.py` | ——（本项目新增） | 把 OAS 的 1280×720 roi 换算到 878×404，让新增副本能直接复用 OAS 的坐标 |
 | `tasks/orochi/templates/*.png` | `tasks/**/assets.py` 引用的图 | **全部识别模板图**，经 `tools/import_oas_assets.py` 等比缩放导入 |
 | `tools/import_oas_assets.py` | `dev_tools/assets_extract.py` | 从 `assets.py` 解析 `RuleImage` 定义并批量导入模板的思路 |
 
