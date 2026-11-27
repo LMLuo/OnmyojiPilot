@@ -241,8 +241,10 @@ class BaseTask:
         避免每次按压时长完全一致（固定按压时长是很强的机器特征）。
 
         repeat_check=False 用于"全屏随机空白点击"这类场景：
-        此时"同一按钮被重复点击"没有意义，但仍需重置卡死计时。
-        （OAS 在 multi_click 里同样用 click(control_check=False) 跳过该检查）
+        它没有按钮身份（每次位置都不同），既不参与"同一按钮重复点击"的
+        记录与检查，也只保留清卡死计时。
+        （OAS 对应 `click(control_check=False)`，里面对 handle_control_check
+        是整体跳过的，不会写进 click_record）
         """
         if duration is None:
             duration = self.rand_duration("click_dur")
@@ -250,11 +252,36 @@ class BaseTask:
         self.handle_control_check(control_name or f"({x},{y})", repeat_check=repeat_check)
 
     def handle_control_check(self, button, repeat_check=True):
-        """OAS handle_control_check：清卡死计时 + 记录点击 + 检查重复点击"""
+        """
+        记录点击 + 清卡死计时 + 检查重复点击。
+
+        注意 `repeat_check=False` 的处理，这里踩过一个必现 bug：
+        原先的写法是"**记录下来、只是不做检查**"，看着无害，其实是定时炸弹 ——
+        结算界面的空白点击（数量多、名字都叫 settle）会静默堆进 click_record，
+        没人检查就一直攒着；等到下一轮 `enter_battle` 点「挑战」时，
+        那次是带检查的，于是一并计数，直接 >=10 报
+        GameTooManyClickError。实测在传承试炼跑到第 5 轮必炸
+        （17:28:23 那次的日志就是）。
+
+        正确语义照 OAS `module/device/control.py:63 click(control_check=False)`：
+        **既不记录、也不检查**，只保留清卡死计时。OAS 里随机空白点击
+        （multi_click）走的就是这条路。
+        """
         self.stuck_timer.reset()
+        if not repeat_check:
+            return
         self.click_record.append(str(button))
-        if repeat_check:
-            self.click_record_check()
+        self.click_record_check()
+
+    def click_record_clear(self):
+        """
+        清空点击历史（照搬 OAS `device.click_record_clear()`）。
+
+        必须在**每一轮战斗开始**时调用，原因见 handle_control_check 的注释：
+        click_record 是跨轮累积的，不清就会在第 5~10 轮之间误报防卡死。
+        OAS 在 `battle_wait()` 开头和 `general_battle.py:172` 都做了这一步。
+        """
+        self.click_record.clear()
 
     def click_record_check(self):
         """OAS click_record_check：同按钮 10 次 / 两按钮各 6 次 -> 报错"""

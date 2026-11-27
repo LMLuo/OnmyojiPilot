@@ -137,6 +137,10 @@ class OrochiTask(BaseTask):
     # ---------- 单轮战斗 ----------
     def battle_once(self):
         round_start = time.time()
+        # 每轮开头清空点击历史（照搬 OAS battle_wait 开头的 click_record_clear）。
+        # click_record 是跨轮累积的，不清的话「挑战」+ 结算空白的点击会攒起来，
+        # 在若干轮之后误报"同一按钮点击过多"。
+        self.click_record_clear()
         # 1. 点挑战 + 确认真的进战斗
         entered = False
         for attempt in range(1, 6):

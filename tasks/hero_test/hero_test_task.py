@@ -360,6 +360,11 @@ class HeroTestTask(BaseTask):
     def battle_once(self):
         round_start = time.time()
 
+        # 每轮开头清空点击历史（照搬 OAS battle_wait 开头的 click_record_clear）。
+        # 不清的话，上一轮「挑战」和结算空白的点击会一直攒着，
+        # 到第 5~10 轮之间触发"同一按钮点击过多"的误报 —— 实测必现。
+        self.click_record_clear()
+
         # 1. 点挑战 + 确认真的进战斗
         if not self.enter_battle():
             if self.has_challenge_button():
