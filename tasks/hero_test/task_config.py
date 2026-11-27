@@ -43,8 +43,9 @@ TEMPLATES = {
     "gbb_entry": {
         "file": "gbb_entry.png",
         "threshold": 0.80,
-        # 左侧竖排"鬼兵演武"标签。OAS 原 (95,344,37,131)
-        "roi_back": (133, 193, 21, 74),
+        # 左侧竖排"鬼兵演武"标签。OAS 原 (95,344,37,131)，原 roi_back 正好等于模板尺寸，
+        # 这里左右上下各放一点，让多尺度五档都塞得进去。
+        "roi_back": (127, 183, 33, 94),
         "roi_front": (133, 193, 21, 74),
     },
     "hero_fire": {
@@ -92,8 +93,8 @@ TEMPLATES = {
     "battle_false": {
         "file": "battle_false.png",
         "threshold": 0.75,
-        # "战斗失败"
-        "roi_back": (312, 70, 56, 56),
+        # "战斗失败"。OAS 原 roi_back 正好等于模板尺寸，这里外扩一圈
+        "roi_back": (300, 58, 80, 80),
         "roi_front": (312, 70, 56, 56),
     },
 }

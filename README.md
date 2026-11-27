@@ -156,7 +156,10 @@ python tools/import_oas_assets.py <任务名>
 
 # 2. 把脚本打印出的 roi 填进你的 task_config.py（已按 878x404 换算好）
 
-# 3. 实机停在目标界面，跑一次校准核对偏差
+# 3. 静态自检：查 roi 越界、搜索区比模板还小、模板缺失等
+python tools/check_config.py <任务名>
+
+# 4. 实机停在目标界面，跑一次校准核对偏差
 python tools/calibrate_roi.py --task <任务名>
 ```
 
