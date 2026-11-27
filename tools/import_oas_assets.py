@@ -1,17 +1,22 @@
 """
-从 OAS 项目导入现成的识别模板，并按投屏分辨率缩放。
+从 OAS 项目导入现成的识别模板，并缩放到本项目基准尺寸。
 
-OAS 资产基于 1280x720，ZenLink 投屏约 739x340。
+OAS 资产基于 1280x720；本项目统一用 BASE_W×BASE_H（878x404）作为识别基准，
+matcher 在匹配时会按窗口实际尺寸再等比映射一次。
+所以模板【必须】缩放到 BASE 口径，不能按"当前窗口尺寸"缩放——否则会被缩两次。
+
 本脚本：
 1. 解析 OAS 的 assets.py 提取 RuleImage 定义（file / threshold / roi）
-2. 复制并缩放 PNG 到 OnmyojiPilot 的模板目录
-3. 生成 templates_config.py（供 matcher 加载）
+2. 复制并按 BASE_H 等比缩放 PNG 到模板目录
+3. 打印 roi 建议值（BASE 口径），供人工写入 config.py
+
+注意：不自动生成配置文件。模板的 roi / 阈值需要人工按实际画面校准
+（OAS 的 roi 是 1280x720 口径，直接换算过去往往有几十像素偏差）。
 
 用法：python tools/import_oas_assets.py
 """
 import os
 import re
-import shutil
 import cv2
 
 # 路径
@@ -20,6 +25,8 @@ BOT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(BOT_ROOT, "tasks", "orochi", "templates")
 
 SOURCE_W, SOURCE_H = 1280, 720
+BASE_W, BASE_H = 878, 404
+SCALE = BASE_H / SOURCE_H  # ≈0.5611，模板统一缩放比例
 
 # 需要导入的资产：名称 -> (assets.py 相对路径, 变量名, OnmyojiPilot 中的新名字)
 NEEDED = [
@@ -64,22 +71,12 @@ def parse_assets(path):
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
+    print(f"基准尺寸 {BASE_W}x{BASE_H}，统一缩放比 {SCALE:.4f}")
+    if not os.path.isdir(OAS_ROOT):
+        print(f"错误: 找不到 OAS 项目 {OAS_ROOT}")
+        print("请先把 https://github.com/nearaura/OnmyojiAutoScript 克隆到该路径")
+        raise SystemExit(1)
 
-    # 从当前画面读取实际缩放比
-    sys_path = os.path.join(BOT_ROOT, "core")
-    import sys
-    sys.path.insert(0, BOT_ROOT)
-    from core.window import WindowDevice
-    dev = WindowDevice()
-    if not dev.find_window():
-        print("警告: 无法定位窗口，使用默认缩放比")
-        sx, sy = 739 / SOURCE_W, 340 / SOURCE_H
-    else:
-        sx = dev.width / SOURCE_W
-        sy = dev.height / SOURCE_H
-        print(f"投屏尺寸: {dev.width}x{dev.height}, 缩放比: {sx:.4f}, {sy:.4f}")
-
-    config_lines = ["# 自动生成的模板配置（由 import_oas_assets.py 生成，勿手改）", "TEMPLATES = {"]
     imported = []
 
     cache = {}
@@ -100,36 +97,27 @@ def main():
         img = cv2.imread(src)
         if img is None:
             continue
-        # 关键：必须【等比】缩放！OAS 原图是 1280x720 下截取的，
-        # 非等比缩放（x/y 用不同比例）会让模板变形，匹配分数从 0.97 掉到 0.6。
-        # 用高度比例作为统一缩放因子（高度受画面比例影响更小）。
-        scale = sy
-        new_w = max(1, round(img.shape[1] * scale))
-        new_h = max(1, round(img.shape[0] * scale))
+        # 关键：必须【等比】缩放！非等比（x/y 用不同比例）会让模板变形，
+        # 匹配分数从 0.97 掉到 0.6。以高度比例作为统一因子。
+        new_w = max(1, round(img.shape[1] * SCALE))
+        new_h = max(1, round(img.shape[0] * SCALE))
         resized = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
         out_name = f"{new_name}.png"
         cv2.imwrite(os.path.join(OUT_DIR, out_name), resized)
 
-        # roi_front 也按统一比例缩放
+        # roi_front 换算到 BASE 口径，仅作参考打印
         fx, fy, fw, fh = info["roi_front"]
-        new_roi = (round(fx * scale), round(fy * scale),
-                   max(1, round(fw * scale)), max(1, round(fh * scale)))
-
-        config_lines.append(
-            f'    "{new_name}": {{"file": "{out_name}", "threshold": {info["threshold"]}, "roi_front": {new_roi}}},'
-        )
-        imported.append(new_name)
+        base_roi = (round(fx * SCALE), round(fy * SCALE),
+                    max(1, round(fw * SCALE)), max(1, round(fh * SCALE)))
+        imported.append((new_name, out_name, base_roi, info["threshold"]))
         print(f"  导入 {var_name} -> {new_name}  {img.shape[1]}x{img.shape[0]} -> {new_w}x{new_h}")
 
-    config_lines.append("}")
-    config_path = os.path.join(BOT_ROOT, "tasks", "orochi", "templates_config.py")
-    with open(config_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(config_lines) + "\n")
-
-    print(f"\n完成: 导入 {len(imported)} 个模板")
-    print(f"模板目录: {OUT_DIR}")
-    print(f"配置文件: {config_path}")
-    print("导入的模板:", ", ".join(imported))
+    print(f"\n完成: 导入 {len(imported)} 个模板到 {OUT_DIR}")
+    print("\nOAS 原始 roi 换算到 BASE 口径（参考值，务必按实际画面校准后再写入 config.py）：")
+    for name, out_name, roi, th in imported:
+        print(f'    "{name}": {{"file": "{out_name}", "threshold": {th}, "roi_front": {roi}}},')
+    print("\n提示：roi_front 只决定点击落点，不决定识别范围；"
+          "识别范围用 roi_back，建议只框住该按钮稳定出现的区域。")
 
 
 if __name__ == "__main__":
