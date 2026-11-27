@@ -7,6 +7,19 @@
 
 ![控制台](docs/screenshot.png)
 
+> ### 🙏 特别感谢 [OnmyojiAutoScript](https://github.com/nearaura/OnmyojiAutoScript)
+>
+> 这个项目能跑起来，靠的是 [@nearaura](https://github.com/nearaura) 的
+> **[OnmyojiAutoScript](https://github.com/nearaura/OnmyojiAutoScript)**（OAS）。
+>
+> 识别机制、交互框架、防卡死的思路，以及全部识别模板图，都来自它。
+> 本项目本质上是把 OAS 那套成熟的自动化设计，搬到一个"不开模拟器、
+> 直接操作投屏窗口"的轻量场景里重新实现了一遍。
+> 没有 OAS 打下的地基，这个项目不会存在。
+>
+> 如果你想要功能完整的阴阳师自动化（组队、御魂溢出、体力管理、更多副本），
+> 请直接去用原项目：**https://github.com/nearaura/OnmyojiAutoScript**
+
 ---
 
 ## 和常见方案的区别
@@ -137,10 +150,35 @@ OnmyojiPilot/
 
 ## 致谢与许可
 
-识别思路与部分模板资产来自
-[nearaura/OnmyojiAutoScript](https://github.com/nearaura/OnmyojiAutoScript)（GPLv3），
-本项目的 `core/` 中有多处是按其机制重写移植的，在此致谢。
+### 主要参考：[OnmyojiAutoScript](https://github.com/nearaura/OnmyojiAutoScript)
 
-本项目同样以 **GPLv3** 发布，见 [LICENSE](LICENSE)。
+本项目的底层设计几乎全部来自
+**[nearaura/OnmyojiAutoScript](https://github.com/nearaura/OnmyojiAutoScript)**（下称 OAS）。
+这不是"参考了一下"，而是把它的机制逐个读懂之后重新实现的。具体对应关系：
+
+| 本项目 | OAS 中的来源 | 借用的是什么 |
+|---|---|---|
+| `core/matcher.py` | `module/atom/image.py` | `RuleImage` 的 `roi_front`/`roi_back` 双层语义、多尺度匹配、退化模板检测、匹配结果清洗 |
+| `core/click.py` | `module/atom/click.py` | `RuleClick` 与 `RuleClickExclude`：rejection / complement 两种取样策略 × uniform / normal 两种分布 |
+| `core/base_task.py` | `tasks/base_task.py`、`module/device/device.py` | `appear` 的每目标独立 interval 定时器、`click_record`（10 次 / 6+6 判定）、`stuck_record` |
+| `core/random_utils.py` | `module/base/utils/utils.py` | `random_normal_distribution_int`、`random_rectangle_point`、`ensure_time` 的截断正态采样 |
+| `tasks/orochi/orochi_task.py` | `tasks/Orochi/script_task.py`、`tasks/Component/GeneralBattle/battle_wait.py` | 副本流程编排、`C_WIN_1/2/3` 随机区域点击、结算界面的 `reward_exclude_click`（只点空白、避开道具图标） |
+| `tasks/orochi/templates/*.png` | `tasks/**/assets.py` 引用的图 | **全部识别模板图**，经 `tools/import_oas_assets.py` 等比缩放导入 |
+| `tools/import_oas_assets.py` | `dev_tools/assets_extract.py` | 从 `assets.py` 解析 `RuleImage` 定义并批量导入模板的思路 |
+
+OAS 是一套功能完整的阴阳师自动化框架（组队、御魂溢出、体力管理、页面图寻路、
+几十个副本），成熟度远高于本项目。如果你需要的不只是"挂个御魂"，
+请直接使用原项目：**https://github.com/nearaura/OnmyojiAutoScript**
+
+### 本项目的差异
+
+只做了一件事：把上面这套设计搬到"不开模拟器、对一个手机投屏窗口发后台消息"的场景。
+为此新增的主要是 `core/window.py` 里的 Win32 截图与注入、contain 等比坐标映射、
+以及单文件网页控制台和任务注册表。
+
+### 许可
+
+OAS 以 **GPLv3** 发布，本项目继承了它的代码与资产，因此同样以 **GPLv3** 发布，见 [LICENSE](LICENSE)。
+如果你要基于本项目做修改并分发，请一并保留 GPLv3 与上述出处说明。
 
 > 仅供学习交流，请自行承担使用风险。请遵守游戏用户协议，不要用于商业用途。
