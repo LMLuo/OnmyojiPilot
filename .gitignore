@@ -1,0 +1,26 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---------- 运行产物 ----------
+# 运行日志、历史记录都是本机数据，不进仓库
+*.log
+history/
+
+# 根目录下的调试截图：tools/ 里的脚本随手截的，不属于项目内容
+# 注意只用 /*.png（仅根目录），任务模板在 tasks/**/templates/ 下，要照常入库
+/*.png
+
+# ---------- 本地工具 ----------
+.workbuddy/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
