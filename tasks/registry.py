@@ -84,7 +84,7 @@ TASKS = [
         name="英杰试炼 · 鬼兵演武",
         group="英杰试炼",
         subtitle="源赖光经验本",
-        desc="从英杰试炼主页面开始，自动进入鬼兵演武并循环挑战，"
+        desc="从英杰试炼主页面开始，自动切到源赖光并进入鬼兵演武循环挑战，"
              "刷满指定次数后停止。用于刷御灵等级。",
         icon="katana",
         accent="#a2321f",
@@ -93,7 +93,29 @@ TASKS = [
         cls=HeroTestTask,
         template_dir=HERO_TEST_TEMPLATE_DIR,
         templates=hero_test_cfg.TEMPLATES,
-        config=hero_test_cfg.HERO_TEST_CONFIG,
+        config={**hero_test_cfg.HERO_TEST_CONFIG, "layer": "gbb"},
+        click_regions=hero_test_cfg.CLICK_REGIONS,
+        settle_exclude=hero_test_cfg.SETTLE_EXCLUDE,
+        timing=hero_test_cfg.TIMING,
+    ),
+    # ---- 英杰试炼：传承试炼（藤原道长的经验本）----
+    # 同一个任务类，只是 layer 不同：靠 LAYERS 里的模板区分英杰和页面，
+    # 战斗流程完全复用（两个子页面的挑战按钮实测在 (763,343.5) 完全重合）。
+    TaskSpec(
+        id="hero_test_ccsl",
+        name="英杰试炼 · 传承试炼",
+        group="英杰试炼",
+        subtitle="藤原道长经验本",
+        desc="从英杰试炼主页面开始，自动切到藤原道长并进入传承试炼循环挑战，"
+             "刷满指定次数后停止。开跑前会检查御灵是否已满级。",
+        icon="ofuda",
+        accent="#2c5f8f",
+        default_limit=30,
+        available=True,
+        cls=HeroTestTask,
+        template_dir=HERO_TEST_TEMPLATE_DIR,
+        templates=hero_test_cfg.TEMPLATES,
+        config={**hero_test_cfg.HERO_TEST_CONFIG, "layer": "ccsl"},
         click_regions=hero_test_cfg.CLICK_REGIONS,
         settle_exclude=hero_test_cfg.SETTLE_EXCLUDE,
         timing=hero_test_cfg.TIMING,

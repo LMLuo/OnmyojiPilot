@@ -80,6 +80,26 @@ TASK_ASSETS = {
             (GB, "I_WIN", "win"),
             (GB, "I_FALSE", "battle_false"),
             (GB, "I_DE_WIN", "de_win"),
+            # ---- 藤原道长这一侧（传承试炼）----
+            # 英杰试炼页左上角圆形头像是"切换英杰"入口，同时显示当前是哪位英杰：
+            #   I_CHECK_HERO1 = 源赖光（白），I_CHECK_HERO2 = 藤原道长
+            ("tasks/HeroTest/assets.py", "I_CHECK_HERO1", "hero1_check"),
+            ("tasks/HeroTest/assets.py", "I_CHECK_HERO2", "hero2_check"),
+            # 展开的英杰列表里的两位英杰（既要能切过去，也要能切回来）
+            ("tasks/HeroTest/assets.py", "I_SWITCH_HERO1", "switch_hero1"),
+            ("tasks/HeroTest/assets.py", "I_SWITCH_HERO2", "switch_hero2"),
+            # 传承试炼入口（藤原道长界面左侧的竖排标签）
+            ("tasks/HeroTest/assets.py", "I_ENTER_CCSL", "ccsl_entry"),
+            # 两个子页面的页面标志：左下角的御灵头像，位置相同、人物不同。
+            # 因为鬼兵演武和传承试炼的「挑战」按钮是同一个点位（实测 0.0px 偏差），
+            # 光靠 hero_fire 分不出现在站在哪一层，必须靠这两张头像区分。
+            ("tasks/HeroTest/assets.py", "I_CHECK_HERO1_EXP", "hero1_exp"),
+            ("tasks/HeroTest/assets.py", "I_CHECK_HERO2_EXP", "ccsl_page"),
+            # 御灵等级旁边那个金色的「满」字，开跑前查一次以免白刷
+            ("tasks/HeroTest/assets.py", "I_HERO_EXP_MAX", "exp_max"),
+            # 说明：OAS 的 I_BACK（as_back.png 通用返回箭头）没导 ——
+            # 它在 OAS 自己的 script_task.py 里一次没被引用（死代码），
+            # 源图与 gbb_back 高度重合，实机校准在 (522,33.5) 误匹配 0.735。
         ],
     },
 }
