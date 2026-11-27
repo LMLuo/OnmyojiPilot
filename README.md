@@ -67,7 +67,7 @@
 **环境**：Windows 10/11 · Python 3.8+
 
 ```bash
-git clone https://github.com/<你的用户名>/OnmyojiPilot.git
+git clone https://github.com/LMLuo/OnmyojiPilot.git
 cd OnmyojiPilot
 pip install -r requirements.txt
 ```
